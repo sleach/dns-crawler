@@ -1,0 +1,110 @@
+image: python:3.9
+
+variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+    - ./test/*.mmdb
+
+stages:
+  - lint
+  - setup
+  - test
+  - build
+  - deploy
+
+lint:
+  stage: lint
+  before_script:
+    - pip install ruff 'validate-pyproject[all]' tomli
+  script:
+    - ruff --format=gitlab .
+    - validate-pyproject pyproject.toml
+
+validate_result_example:
+  stage: lint
+  before_script:
+    - pip install -q check-jsonschema
+  script: 
+    - check-jsonschema --schemafile result-schema.json result-example.json
+
+download_geoip:
+  image: ubuntu
+  stage: setup
+  variables:
+    GEOIP_ACCOUNTID: $GEOIP_ACCOUNTID
+    GEOIP_KEY: $GEOIP_KEY
+  script:
+    - apt-get -yqq update
+    - apt-get install -yqq geoipupdate ca-certificates
+    - echo "AccountID $GEOIP_ACCOUNTID" > /etc/GeoIP.conf
+    - echo "LicenseKey $GEOIP_KEY" >> /etc/GeoIP.conf
+    - echo "EditionIDs GeoLite2-ASN GeoLite2-Country" >> /etc/GeoIP.conf
+    - geoipupdate -d .
+    - mv *.mmdb ./test/
+  artifacts:
+    paths:
+      - ./test/*.mmdb
+
+test_odvr:
+  stage: test
+  dependencies:
+    - download_geoip
+  before_script:
+    - pip install .
+    - pip install -q check-jsonschema
+  script: 
+    - export PYTHONPATH="$(pwd)"
+    - cd test
+    - mv config-odvr.yml config.yml
+    - python nic.cz.test.py > nic.cz.json
+    - check-jsonschema --schemafile ../result-schema.json nic.cz.json
+  artifacts:
+    paths:
+      - ./test/nic.cz.json
+
+test_system_dns:
+  stage: test
+  dependencies:
+    - download_geoip
+  before_script:
+    - pip install .
+    - pip install -q check-jsonschema
+  script: 
+    - export PYTHONPATH="$(pwd)"
+    - cd test
+    - mv config-nodns.yml config.yml
+    - python nic.cz.test.py > nic.cz-nodns.json
+    - check-jsonschema --schemafile ../result-schema.json nic.cz-nodns.json
+
+  artifacts:
+    paths:
+      - ./test/nic.cz-nodns.json
+
+build:
+  stage: build
+  script:
+    - pip install -U pip
+    - pip install build
+    - python -m build
+  artifacts:
+    paths:
+      - ./dist
+
+deploy_pypi:
+  stage: deploy
+  dependencies:
+    - build
+  variables:
+    TWINE_USERNAME: $PYPI_USERNAME
+    TWINE_PASSWORD: $PYPI_PASSWORD
+  before_script:
+    - pip install twine
+  script:
+    - twine check --strict dist/*
+    - twine upload dist/*
+  only:
+    - tags

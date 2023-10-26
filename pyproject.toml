@@ -1,0 +1,33 @@
+[project]
+name = "dns-crawler"
+description = 'A distributed crawler for getting info about DNS domains and services attached to them.'
+requires-python = ">=3.7"
+dynamic = ["dependencies", "version"]
+readme = "README.md"
+keywords = ["crawler", "dns", "http", "https", "smtp", "dnssec"]
+authors = [{ name = "Jiri Helebrant", email = "jiri.helebrant@nic.cz" }]
+license = {text = "GPL version 3"}
+
+[project.scripts]
+dns-crawler-controller = "dns_crawler.controller:main"
+dns-crawler-workers = "dns_crawler.workers:main"
+dns-crawler-worker = "dns_crawler.worker:main"
+dns-crawler = "dns_crawler.single:main"
+
+[project.urls]
+homepage = "https://gitlab.nic.cz/adam/dns-crawler/"
+changelog = "https://gitlab.nic.cz/adam/dns-crawler/-/blob/master/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.ruff]
+exclude = [".venv"]
+line-length = 120
+
+[build-system]
+requires = ["setuptools>=41", "wheel", "setuptools-git-versioning<2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools-git-versioning]
+enabled = true
